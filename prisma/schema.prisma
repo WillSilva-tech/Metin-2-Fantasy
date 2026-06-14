@@ -1,0 +1,156 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               Int                @id @default(autoincrement())
+  uid              String             @unique
+  email            String
+  login            String
+  role             String             @default("PLAYER")
+  cashBalance      Int                @default(0) @map("cash_balance")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  characters       Character[]
+  couponRedemptions CouponRedemption[]
+  cashTransactions  CashTransaction[]
+
+  @@map("users")
+}
+
+model Character {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id])
+  nick       String   @unique
+  level      Int      @default(1)
+  kingdom    String
+  className  String   @map("class_name")
+  playedTime String   @default("0h") @map("played_time")
+  league     String   @default("Bronze")
+  leagueIcon String   @default("⚔️") @map("league_icon")
+  rank       Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("characters")
+}
+
+model Guild {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  leaderNick String   @map("leader_nick")
+  level      Int      @default(1)
+  kingdom    String
+  rank       Int?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("guilds")
+}
+
+model News {
+  id        Int      @id @default(autoincrement())
+  category  String
+  title     String
+  excerpt   String
+  content   String
+  imageUrl  String   @map("image_url")
+  date      String
+  author    String   @default("GM_Staff")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("news")
+}
+
+model Video {
+  id          String   @id
+  title       String
+  subtitle    String?
+  description String?
+  category    String
+  duration    String?
+  rarity      String?
+  author      String?
+  views       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("videos")
+}
+
+model Coupon {
+  id         Int                @id @default(autoincrement())
+  code       String             @unique
+  value      Int
+  expiration DateTime?
+  limitUse   Int?               @map("limit_use")
+  usedCount  Int                @default(0) @map("used_count")
+  isActive   Boolean            @default(true) @map("is_active")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  redemptions CouponRedemption[]
+
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id         Int      @id @default(autoincrement())
+  couponId   Int      @map("coupon_id")
+  coupon     Coupon   @relation(fields: [couponId], references: [id])
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  redeemedAt DateTime @default(now()) @map("redeemed_at")
+
+  @@map("coupon_redemptions")
+}
+
+model CashTransaction {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  amount     Int
+  status     String
+  provider   String
+  externalId String?  @map("external_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("cash_transactions")
+}
+
+model Event {
+  id          String   @id
+  title       String
+  time        String?
+  days        String
+  status      String
+  emoji       String?
+  description String
+  howItWorks  String?  @map("how_it_works")
+  dynamics    String?
+  elimination String?
+  victory     String?
+  rewards     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("events")
+}
+
+model ServerStatus {
+  id          Int      @id @default(autoincrement())
+  status      String   @default("online")
+  playerCount Int      @default(128) @map("player_count")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@map("server_status")
+}
+
+model AdminLog {
+  id        Int      @id @default(autoincrement())
+  userUid   String   @map("user_uid")
+  action    String
+  details   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admin_logs")
+}

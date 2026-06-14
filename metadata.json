@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Fantasy2 MMORPG",
+  "description": "Website Oficial do Servidor MMORPG Fantasy2 AAA Premium. Fantasia sombria, reinos em guerra, dragões de lava e combates lendários.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: var(--font-serif), Cormorant Garamond, serif;
+  --font-sans: var(--font-sans), Poppins, sans-serif;
+  
+  --color-primary: #FF6A00;
+  --color-secondary: #E87A00;
+  --color-highlight: #FFD700;
+  --color-lava: #C92A00;
+  --color-bg-primary: #080402;
+  --color-bg-secondary: #150A04;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom lava glass and atmospheric glows */
+.lava-glass {
+  background: rgba(21, 10, 4, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 106, 0, 0.15);
+}
+
+.lava-glass-hover:hover {
+  border-color: rgba(255, 106, 0, 0.4);
+  box-shadow: 0 0 20px rgba(199, 42, 0, 0.2);
+}
+
+.gold-glow {
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+}
+
+.lava-text-glow {
+  text-shadow: 0 0 8px rgba(255, 106, 0, 0.6), 0 0 15px rgba(199, 42, 0, 0.4);
+}
+
+.gold-text-glow {
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #080402;
+}
+::-webkit-scrollbar-thumb {
+  background: #C92A00;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FF6A00;
+}
