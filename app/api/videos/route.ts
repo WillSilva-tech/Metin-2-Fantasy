@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 
-// Configura o link de dados usando a variável correta cadastrada na Vercel (DATABASE_URL)
-// Se estiver rodando a build, usa a string de teste temporária para não quebrar o Next.js
-const connectionString = process.env.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder';
-const sql = neon(connectionString);
+/**
+ * FUNÇÃO AUXILIAR: Inicializa o cliente SQL dinamicamente.
+ * Isso evita falhas de validação de formato de string durante o build da Vercel.
+ */
+function getClient() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL não configurada no painel da Vercel.');
+  }
+  return neon(connectionString);
+}
 
 /**
  * FUNÇÃO AUXILIAR: Garante a existência da tabela de vídeos no PostgreSQL.
  */
-async function ensureTableExists() {
+async function ensureTableExists(sql: any) {
   await sql`
     CREATE TABLE IF NOT EXISTS videos (
       id VARCHAR(50) PRIMARY KEY,
@@ -29,19 +36,18 @@ async function ensureTableExists() {
  */
 export async function POST(request: Request) {
   try {
-    // 1. Verifica e cria a tabela se necessário antes de interagir
-    await ensureTableExists();
+    // Inicialização dinâmica segura (só roda quando recebe o clique do botão)
+    const sql = getClient();
+    await ensureTableExists(sql);
 
-    // 2. Extrai e desestrutura o corpo da requisição JSON
     const body = await request.json();
     const { videoUrl, title, subtitle, description, category, subcategory } = body;
 
-    // 3. Validação de campos obrigatórios do formulário
     if (!videoUrl || !title) {
       return NextResponse.json({ success: false, error: 'Dados incompletos.' }, { status: 400 });
     }
 
-    // 4. Lógica refinada para extração limpa do ID do YouTube (11 caracteres)
+    // Lógica para extração limpa do ID do YouTube (11 caracteres)
     let videoId = videoUrl.trim();
     if (videoId.includes('v=')) {
       videoId = videoId.split('v=')[1]?.split('&')[0];
@@ -51,17 +57,16 @@ export async function POST(request: Request) {
       videoId = videoId.split('embed/')[1]?.split('?')[0];
     }
 
-    // Remove qualquer parâmetro extra residual de compartilhamento (ex: ?si=...)
+    // Remove parâmetros extras de compartilhamento (ex: ?si=...)
     if (videoId && videoId.includes('?')) {
       videoId = videoId.split('?')[0];
     }
 
-    // Validação de segurança sobre o formato do ID extraído
     if (!videoId || videoId.length !== 11) {
       return NextResponse.json({ success: false, error: 'URL do YouTube inválida.' }, { status: 400 });
     }
 
-    // 5. Executa o UPSERT usando a sintaxe correta de Tagged Templates do Neon
+    // Executa o UPSERT usando Tagged Templates do Neon
     await sql`
       INSERT INTO videos (id, title, subtitle, description, category, subcategory, views)
       VALUES (${videoId}, ${title.trim()}, ${subtitle?.trim() || 'Traje'}, ${description?.trim() || ''}, ${category || 'trajes'}, ${subcategory || 'todos'}, 0)
@@ -81,9 +86,10 @@ export async function POST(request: Request) {
  */
 export async function GET() {
   try {
-    await ensureTableExists();
+    // Inicialização dinâmica segura
+    const sql = getClient();
+    await ensureTableExists(sql);
 
-    // Seleciona os registros ordenando-os por categoria e título alfabeticamente
     const rows = await sql`SELECT * FROM videos ORDER BY category ASC, title ASC;`;
     
     return NextResponse.json({ success: true, videos: rows });
