@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 
+// FORÇA A ROTA A SER SEMPRE DINÂMICA
+// Isso impede o Next.js de tentar ler ou validar conexões vazias/falsas durante a compilação.
+export const dynamic = 'force-dynamic';
+
 /**
  * FUNÇÃO AUXILIAR: Inicializa o cliente SQL dinamicamente.
  * Isso evita falhas de validação de formato de string durante o build da Vercel.
