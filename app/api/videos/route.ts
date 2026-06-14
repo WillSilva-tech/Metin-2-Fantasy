@@ -4,7 +4,8 @@ import { neon } from '@neondatabase/serverless';
 const sql = neon(process.env.POSTGRES_URL || '');
 
 async function ensureTableExists() {
-  await sql(`
+  // Removidos os parênteses: agora a crase encosta direto no sql
+  await sql`
     CREATE TABLE IF NOT EXISTS videos (
       id VARCHAR(50) PRIMARY KEY,
       title VARCHAR(255) NOT NULL,
@@ -15,7 +16,7 @@ async function ensureTableExists() {
       views INT DEFAULT 0,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
-  `);
+  `;
 }
 
 export async function POST(request: Request) {
@@ -45,12 +46,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'URL do YouTube inválida.' }, { status: 400 });
     }
 
-    await sql(`
+    // Removidos os parênteses da inserção também
+    await sql`
       INSERT INTO videos (id, title, subtitle, description, category, subcategory, views)
-      VALUES ($1, $2, $3, $4, $5, $6, 0)
+      VALUES (${videoId}, ${title.trim()}, ${subtitle?.trim() || 'Traje'}, ${description?.trim() || ''}, ${category || 'trajes'}, ${subcategory || 'todos'}, 0)
       ON CONFLICT (id) DO UPDATE 
-      SET title = $2, subtitle = $3, description = $4, category = $5, subcategory = $6;
-    `, [videoId, title.trim(), subtitle?.trim() || 'Traje', description?.trim() || '', category || 'trajes', subcategory || 'todos']);
+      SET title = ${title.trim()}, subtitle = ${subtitle?.trim() || 'Traje'}, description = ${description?.trim() || ''}, category = ${category || 'trajes'}, subcategory = ${subcategory || 'todos'};
+    `;
 
     return NextResponse.json({ success: true, message: 'Vídeo salvo com sucesso no banco de dados!' });
   } catch (error: any) {
@@ -62,7 +64,8 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     await ensureTableExists();
-    const rows = await sql('SELECT * FROM videos ORDER BY category ASC, title ASC;');
+    // Removidos os parênteses do SELECT
+    const rows = await sql`SELECT * FROM videos ORDER BY category ASC, title ASC;`;
     return NextResponse.json({ success: true, videos: rows });
   } catch (error: any) {
     console.error(error);
