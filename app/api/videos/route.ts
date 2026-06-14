@@ -2,18 +2,25 @@ import { NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 
 // FORÇA A ROTA A SER SEMPRE DINÂMICA
-// Isso impede o Next.js de tentar ler ou validar conexões vazias/falsas durante a compilação.
 export const dynamic = 'force-dynamic';
 
 /**
  * FUNÇÃO AUXILIAR: Inicializa o cliente SQL dinamicamente.
- * Isso evita falhas de validação de formato de string durante o build da Vercel.
  */
 function getClient() {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL não configurada no painel da Vercel.');
+  
+  // LOG de segurança para monitorar no painel da Vercel Logs
+  console.log("Tentando conectar com DATABASE_URL de tamanho:", connectionString ? connectionString.length : 0);
+
+  if (!connectionString || connectionString.trim() === '') {
+    throw new Error('A variável DATABASE_URL está completamente vazia no painel da Vercel.');
   }
+
+  if (!connectionString.startsWith('postgres://') && !connectionString.startsWith('postgresql://')) {
+    throw new Error('A string de conexão em DATABASE_URL não começa com postgresql:// ou postgres://');
+  }
+
   return neon(connectionString);
 }
 
@@ -40,7 +47,6 @@ async function ensureTableExists(sql: any) {
  */
 export async function POST(request: Request) {
   try {
-    // Inicialização dinâmica segura (só roda quando recebe o clique do botão)
     const sql = getClient();
     await ensureTableExists(sql);
 
@@ -51,7 +57,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Dados incompletos.' }, { status: 400 });
     }
 
-    // Lógica para extração limpa do ID do YouTube (11 caracteres)
     let videoId = videoUrl.trim();
     if (videoId.includes('v=')) {
       videoId = videoId.split('v=')[1]?.split('&')[0];
@@ -61,7 +66,6 @@ export async function POST(request: Request) {
       videoId = videoId.split('embed/')[1]?.split('?')[0];
     }
 
-    // Remove parâmetros extras de compartilhamento (ex: ?si=...)
     if (videoId && videoId.includes('?')) {
       videoId = videoId.split('?')[0];
     }
@@ -70,7 +74,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'URL do YouTube inválida.' }, { status: 400 });
     }
 
-    // Executa o UPSERT usando Tagged Templates do Neon
     await sql`
       INSERT INTO videos (id, title, subtitle, description, category, subcategory, views)
       VALUES (${videoId}, ${title.trim()}, ${subtitle?.trim() || 'Traje'}, ${description?.trim() || ''}, ${category || 'trajes'}, ${subcategory || 'todos'}, 0)
@@ -78,9 +81,9 @@ export async function POST(request: Request) {
       SET title = ${title.trim()}, subtitle = ${subtitle?.trim() || 'Traje'}, description = ${description?.trim() || ''}, category = ${category || 'trajes'}, subcategory = ${subcategory || 'todos'};
     `;
 
-    return NextResponse.json({ success: true, message: 'Vídeo salvo com sucesso no banco de dados!' });
+    return NextResponse.json({ success: true, message: 'Vídeo salv com sucesso!' });
   } catch (error: any) {
-    console.error(error);
+    console.error("Erro interno na rota POST de vídeos:", error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
@@ -90,7 +93,6 @@ export async function POST(request: Request) {
  */
 export async function GET() {
   try {
-    // Inicialização dinâmica segura
     const sql = getClient();
     await ensureTableExists(sql);
 
@@ -98,7 +100,7 @@ export async function GET() {
     
     return NextResponse.json({ success: true, videos: rows });
   } catch (error: any) {
-    console.error(error);
+    console.error("Erro interno na rota GET de vídeos:", error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
