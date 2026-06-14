@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 
+// Inicializa a conexão de forma otimizada para ambientes Serverless da Vercel
 const sql = neon(process.env.POSTGRES_URL || '');
 
+/**
+ * FUNÇÃO AUXILIAR: Garante a existência da tabela de vídeos no PostgreSQL.
+ */
 async function ensureTableExists() {
-  // Removidos os parênteses: agora a crase encosta direto no sql
   await sql`
     CREATE TABLE IF NOT EXISTS videos (
       id VARCHAR(50) PRIMARY KEY,
@@ -19,16 +22,24 @@ async function ensureTableExists() {
   `;
 }
 
+/**
+ * MÉTODO POST: Recebe os dados vindos do Painel do GM e salva/atualiza no banco.
+ */
 export async function POST(request: Request) {
   try {
+    // 1. Verifica e cria a tabela se necessário antes de interagir
     await ensureTableExists();
+
+    // 2. Extrai e desestrutura o corpo da requisição JSON
     const body = await request.json();
     const { videoUrl, title, subtitle, description, category, subcategory } = body;
 
+    // 3. Validação de campos obrigatórios do formulário
     if (!videoUrl || !title) {
       return NextResponse.json({ success: false, error: 'Dados incompletos.' }, { status: 400 });
     }
 
+    // 4. Lógica refinada para extração limpa do ID do YouTube (11 caracteres)
     let videoId = videoUrl.trim();
     if (videoId.includes('v=')) {
       videoId = videoId.split('v=')[1]?.split('&')[0];
@@ -38,15 +49,17 @@ export async function POST(request: Request) {
       videoId = videoId.split('embed/')[1]?.split('?')[0];
     }
 
+    // Remove qualquer parâmetro extra residual de compartilhamento (ex: ?si=...)
     if (videoId && videoId.includes('?')) {
       videoId = videoId.split('?')[0];
     }
 
+    // Validação de segurança sobre o formato do ID extraído
     if (!videoId || videoId.length !== 11) {
       return NextResponse.json({ success: false, error: 'URL do YouTube inválida.' }, { status: 400 });
     }
 
-    // Removidos os parênteses da inserção também
+    // 5. Executa o UPSERT usando a sintaxe correta de Tagged Templates do Neon
     await sql`
       INSERT INTO videos (id, title, subtitle, description, category, subcategory, views)
       VALUES (${videoId}, ${title.trim()}, ${subtitle?.trim() || 'Traje'}, ${description?.trim() || ''}, ${category || 'trajes'}, ${subcategory || 'todos'}, 0)
@@ -61,11 +74,16 @@ export async function POST(request: Request) {
   }
 }
 
+/**
+ * MÉTODO GET: Resgata a lista ordenada de todos os vídeos para alimentar o frontend.
+ */
 export async function GET() {
   try {
     await ensureTableExists();
-    // Removidos os parênteses do SELECT
+
+    // Seleciona os registros ordenando-os por categoria e título alfabeticamente
     const rows = await sql`SELECT * FROM videos ORDER BY category ASC, title ASC;`;
+    
     return NextResponse.json({ success: true, videos: rows });
   } catch (error: any) {
     console.error(error);
