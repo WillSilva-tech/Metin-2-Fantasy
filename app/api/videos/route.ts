@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { neon } from '@neondatabase/serverless';
 
-// Inicializa a conexão de forma otimizada para ambientes Serverless da Vercel
-const sql = neon(process.env.POSTGRES_URL || '');
+// Configura o link de dados usando a variável correta cadastrada na Vercel (DATABASE_URL)
+// Se estiver rodando a build, usa a string de teste temporária para não quebrar o Next.js
+const connectionString = process.env.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder';
+const sql = neon(connectionString);
 
 /**
  * FUNÇÃO AUXILIAR: Garante a existência da tabela de vídeos no PostgreSQL.
