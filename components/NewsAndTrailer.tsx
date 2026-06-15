@@ -149,12 +149,35 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
       </div>
 
       {isDeveloper && (
-        <div className="mt-8 bg-[#0E0602] border border-[#FF6A00]/40 p-6 rounded-2xl">
+        <div id="admin-playlists-cockpit" className="mt-8 bg-[#0E0602]/95 border border-[#FF6A00]/40 p-6 rounded-2xl shadow-xl">
+          <h3 className="text-primary font-serif uppercase mb-4">Painel Imperial de Controle</h3>
+          
           <form onSubmit={handleAddOrSaveVideo} className="space-y-4">
-             <input placeholder="Título" value={formTitle} onChange={(e) => setFormTitle(e.target.value)} className="w-full bg-black p-2 border border-white/10" />
-             <input placeholder="Link YouTube" value={formLink} onChange={(e) => setFormLink(e.target.value)} className="w-full bg-black p-2 border border-white/10" />
-             <button type="submit" className="bg-primary px-6 py-2 rounded">Salvar no Postgres</button>
+            <input 
+              type="text" 
+              value={formTitle} 
+              onChange={(e) => setFormTitle(e.target.value)} 
+              className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-white" 
+              placeholder="Título do Vídeo" 
+            />
+            <input 
+              type="text" 
+              value={formLink} 
+              onChange={(e) => setFormLink(e.target.value)} 
+              className="w-full bg-black/50 border border-white/10 rounded-lg p-2.5 text-white" 
+              placeholder="Link do YouTube" 
+            />
+            
+            <button 
+              type="submit" 
+              className="w-full bg-[#FF6A00] hover:bg-[#FF8C33] text-black font-bold py-2.5 rounded-lg transition-all"
+            >
+              Salvar no Postgres
+            </button>
           </form>
+
+          {playlistFormError && <p className="text-red-500 text-xs mt-3">❌ {playlistFormError}</p>}
+          {playlistFormSuccess && <p className="text-green-400 text-xs mt-3">✨ {playlistFormSuccess}</p>}
         </div>
       )}
     </section>
