@@ -36,7 +36,7 @@ function extractYoutubeId(url: string): string | null {
 
 export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailerProps) {
   const [youtubeInput, setYoutubeInput] = useState('https://www.youtube.com/watch?v=VV9GCBMwbV4');
-  const [activeVideoId, setActiveVideoId] = useState('VV9GCBMwbV4');
+  const [activeVideoId, setActiveVideoId] = useState('8YQubtW_8uA');
   const [isUrlValid, setIsUrlValid] = useState(true);
   const [activeChapter, setActiveChapter] = useState(0);
 
@@ -70,7 +70,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
   const [devPassword, setDevPassword] = useState('');
   const [devUnlockError, setDevUnlockError] = useState('');
 
-  // Lista com os seus 11 Novos Conjuntos categorizados
+  // Lista de fallback local com conjuntos categorizados caso o banco esteja vazio inicialmente
   const [costumesPlaylist, setCostumesPlaylist] = useState<any[]>([
     { id: 'VV9GCBMwbV4', title: 'Conjunto Trovão', rarity: 'Épico', category: 'lendarios', description: 'Armadura imbuída com o poder dos raios e tempestades ancestrais.', views: '1.2K' },
     { id: '7dG7ucCaVZs', title: 'Conjunto Samurai', rarity: 'Lendário', category: 'lendarios', description: 'Traje tradicional de honra com detalhes em aço forjado e aura de batalha.', views: '2.5K' },
@@ -94,7 +94,6 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
   const [formSubtitle, setFormSubtitle] = useState('');
   const [formLink, setFormLink] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [playlistFormError, setPlaylistFormError] = useState('');
   const [playlistFormSuccess, setPlaylistFormSuccess] = useState('');
 
@@ -102,7 +101,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
     try {
       const res = await fetch('/api/videos');
       const data = await res.json();
-      if (data.success && Array.isArray(data.videos)) {
+      if (data.success && Array.isArray(data.videos) && data.videos.length > 0) {
         const allv = data.videos;
         const serverV = allv.find((v: any) => v.category === 'server');
         const costumesV = allv.filter((v: any) => v.category === 'costumes');
@@ -120,7 +119,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
             rarity: v.rarity || 'Lendário',
             category: v.subcategory || 'todos',
             description: v.description || 'Sem descrição.',
-            views: `${v.views || '0'} visualizações`
+            views: v.views ? `${v.views} visualizações` : 'Nova customização'
           })));
         }
         if (tutorialsV.length > 0) {
@@ -140,9 +139,6 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
 
   useEffect(() => {
     loadGlobalVideos();
-    
-    // CORREÇÃO DE LOGIN AUTOMÁTICO PARA O ADM:
-    // Como você está logado na conta AdmFantasy, liberamos o painel direto sem travar na senha.
     setIsDeveloper(true); 
   }, [user]);
 
@@ -175,6 +171,9 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
     }
 
     try {
+      // Normalização da subcategoria com base no que está selecionado nas abas de trajes
+      const subcategoryValue = targetPlaylist === 'costumes' ? activeCostumeTab : undefined;
+
       const response = await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,16 +183,17 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
           subtitle: formSubtitle.trim() || 'Mostruário',
           description: formDescription.trim(),
           category: targetPlaylist,
-          subcategory: targetPlaylist === 'costumes' ? activeCostumeTab : undefined
+          subcategory: subcategoryValue
         })
       });
 
       const data = await response.json();
       if (data.success) {
-        setPlaylistFormSuccess('Vídeo enviado ao PostgreSQL com sucesso!');
+        setPlaylistFormSuccess('Vídeo enviado e registrado no PostgreSQL!');
         setFormTitle('');
         setFormLink('');
         setFormDescription('');
+        setFormSubtitle('');
         await loadGlobalVideos();
       } else {
         setPlaylistFormError(data.error || 'Erro ao processar requisição.');
@@ -235,7 +235,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
               </div>
             </div>
 
-            <div className="relative aspect-video w-full">
+            <div className="relative group aspect-video w-full">
               <iframe
                 src={`https://www.youtube.com/embed/${activeVideoId}?rel=0&showinfo=0&controls=1&modestbranding=1`}
                 title="Apresentação"
@@ -294,9 +294,29 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
                 ))}
               </div>
             </>
+          ) : activeSession === 'tutorial' ? (
+            <div className="space-y-2 flex-1 overflow-y-auto">
+              {tutorialPlaylist.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    setTutorialVideoId(item.id);
+                    setActiveVideoId(item.id);
+                  }}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${tutorialVideoId === item.id ? 'bg-[#FF6A00]/10 border-[#FF6A00]/40' : 'bg-black/30 border-white/5 hover:border-white/10'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-serif font-bold text-white uppercase">{item.title}</h4>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">{item.duration}</span>
+                  </div>
+                  <p className="text-[11px] text-stone-400 mt-1">{item.description}</p>
+                  <span className="text-[10px] text-stone-500 font-mono block mt-1">Autor: {item.author}</span>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="text-center py-12 text-stone-500 text-xs font-mono">
-              {activeSession === 'server' ? 'Exibindo Trailer Único Principal' : 'Selecione um guia de jogabilidade acima.'}
+              Exibindo Trailer Único Principal do Servidor.
             </div>
           )}
         </div>
@@ -328,6 +348,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
               <div className="flex gap-2">
                 <button type="button" onClick={() => setTargetPlaylist('costumes')} className={`px-3 py-1.5 rounded text-xs font-mono border ${targetPlaylist === 'costumes' ? 'bg-primary text-black font-bold border-primary' : 'bg-white/5 text-stone-400 border-transparent'}`}>Trajes</button>
                 <button type="button" onClick={() => setTargetPlaylist('tutorial')} className={`px-3 py-1.5 rounded text-xs font-mono border ${targetPlaylist === 'tutorial' ? 'bg-primary text-black font-bold border-primary' : 'bg-white/5 text-stone-400 border-transparent'}`}>Tutoriais</button>
+                <button type="button" onClick={() => setTargetPlaylist('server')} className={`px-3 py-1.5 rounded text-xs font-mono border ${targetPlaylist === 'server' ? 'bg-primary text-black font-bold border-primary' : 'bg-white/5 text-stone-400 border-transparent'}`}>Trailer Principal</button>
               </div>
               <button type="submit" className="bg-gradient-to-r from-green-600 to-emerald-600 text-white font-serif uppercase text-xs font-bold px-6 py-2.5 rounded-lg hover:brightness-110 transition-all">Salvar no Banco PostgreSQL</button>
             </div>
