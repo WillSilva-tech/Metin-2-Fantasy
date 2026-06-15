@@ -36,7 +36,7 @@ function extractYoutubeId(url: string): string | null {
 
 export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailerProps) {
   const [youtubeInput, setYoutubeInput] = useState('https://www.youtube.com/watch?v=VV9GCBMwbV4');
-  const [activeVideoId, setActiveVideoId] = useState('8YQubtW_8uA');
+  const [activeVideoId, setActiveVideoId] = useState('VV9GCBMwbV4');
   const [isUrlValid, setIsUrlValid] = useState(true);
   const [activeChapter, setActiveChapter] = useState(0);
 
@@ -47,7 +47,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
   const [serverVideoId, setServerVideoId] = useState('8YQubtW_8uA');
   const [costumesVideoId, setCostumesVideoId] = useState('VV9GCBMwbV4');
   const [tutorialVideoId, setTutorialVideoId] = useState('P_PSTTbyD8w');
-  const [activeSession, setActiveSession] = useState<'server' | 'costumes' | 'tutorial'>('server');
+  const [activeSession, setActiveSession] = useState<'costumes' | 'server' | 'tutorial'>('costumes');
 
   const [serverInput, setServerInput] = useState('https://www.youtube.com/watch?v=8YQubtW_8uA');
   const [costumesInput, setCostumesInput] = useState('https://www.youtube.com/watch?v=VV9GCBMwbV4');
@@ -70,7 +70,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
   const [devPassword, setDevPassword] = useState('');
   const [devUnlockError, setDevUnlockError] = useState('');
 
-  // Lista de fallback local com conjuntos categorizados caso o banco esteja vazio inicialmente
+  // Lista OFICIAL com os seus 11 Conjuntos mapeados com IDs limpos do YouTube
   const [costumesPlaylist, setCostumesPlaylist] = useState<any[]>([
     { id: 'VV9GCBMwbV4', title: 'Conjunto Trovão', rarity: 'Épico', category: 'lendarios', description: 'Armadura imbuída com o poder dos raios e tempestades ancestrais.', views: '1.2K' },
     { id: '7dG7ucCaVZs', title: 'Conjunto Samurai', rarity: 'Lendário', category: 'lendarios', description: 'Traje tradicional de honra com detalhes em aço forjado e aura de batalha.', views: '2.5K' },
@@ -171,7 +171,6 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
     }
 
     try {
-      // Normalização da subcategoria com base no que está selecionado nas abas de trajes
       const subcategoryValue = targetPlaylist === 'costumes' ? activeCostumeTab : undefined;
 
       const response = await fetch('/api/videos', {
@@ -203,7 +202,6 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
     }
   };
 
-  // Filtragem dinâmica dos trajes com base na sub-aba ativa
   const filteredCostumes = costumesPlaylist.filter(c => 
     activeCostumeTab === 'todos' ? true : c.category === activeCostumeTab
   );
@@ -219,7 +217,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
           Apresentação Multimídia Oficial
         </span>
         <h2 className="font-serif text-4xl sm:text-5xl font-black uppercase tracking-wider text-white">
-          VÍDEO DE <span className="text-primary font-serif">APRESENTAÇÃO</span>
+          MOSTRUÁRIO DE <span className="text-primary font-serif">TRAJES IMPERIAIS</span>
         </h2>
         <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#FF6A00] to-transparent mx-auto mt-4" />
       </div>
@@ -247,11 +245,11 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
             {/* ABAS DE NAVEGAÇÃO PRINCIPAL */}
             <div className="px-4 py-4 bg-[#0a0502] border-t border-white/5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-full">
-                <button onClick={() => handleSwitchSession('server')} className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-serif font-black text-xs uppercase tracking-wider border ${activeSession === 'server' ? 'bg-gradient-to-r from-red-600 to-[#FF6A00] text-white border-[#FF6A00]/50' : 'bg-black/40 text-stone-400 border-white/5'}`}>
-                  <Tv className="w-4 h-4" /> Apresentação do Servidor
-                </button>
                 <button onClick={() => handleSwitchSession('costumes')} className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-serif font-black text-xs uppercase tracking-wider border ${activeSession === 'costumes' ? 'bg-gradient-to-r from-red-600 to-[#FF6A00] text-white border-[#FF6A00]/50' : 'bg-black/40 text-stone-400 border-white/5'}`}>
                   <Sparkles className="w-4 h-4" /> Apresentação dos Trajes
+                </button>
+                <button onClick={() => handleSwitchSession('server')} className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-serif font-black text-xs uppercase tracking-wider border ${activeSession === 'server' ? 'bg-gradient-to-r from-red-600 to-[#FF6A00] text-white border-[#FF6A00]/50' : 'bg-black/40 text-stone-400 border-white/5'}`}>
+                  <Tv className="w-4 h-4" /> Trailer do Servidor
                 </button>
                 <button onClick={() => handleSwitchSession('tutorial')} className={`py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-serif font-black text-xs uppercase tracking-wider border ${activeSession === 'tutorial' ? 'bg-gradient-to-r from-red-600 to-[#FF6A00] text-white border-[#FF6A00]/50' : 'bg-black/40 text-stone-400 border-white/5'}`}>
                   <Gamepad2 className="w-4 h-4" /> Tutorial Gameplay
