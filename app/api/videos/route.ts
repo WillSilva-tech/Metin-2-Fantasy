@@ -43,7 +43,7 @@ async function ensureTableExists(sql: any) {
 }
 
 /**
- * MÉTODO POST: Recebe os dados vindos do Painel do GM e salva/atualiza no banco.
+ * MÉTODO POST: Recebe os dados vindos do Painel do GM, filtra o ID do YouTube e salva no banco.
  */
 export async function POST(request: Request) {
   try {
@@ -57,31 +57,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Dados incompletos.' }, { status: 400 });
     }
 
-    let videoId = videoUrl.trim();
-    if (videoId.includes('v=')) {
-      videoId = videoId.split('v=')[1]?.split('&')[0];
-    } else if (videoId.includes('youtu.be/')) {
-      videoId = videoId.split('youtu.be/')[1]?.split('?')[0];
-    } else if (videoId.includes('embed/')) {
-      videoId = videoId.split('embed/')[1]?.split('?')[0];
+    // REGEX UNIVERSAL: Captura com precisão os 11 caracteres do ID de QUALQUER formato de link do YouTube
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = videoUrl.trim().match(regExp);
+    const videoId = (match && match[2].length === 11) ? match[2] : null;
+
+    if (!videoId) {
+      return NextResponse.json({ success: false, error: 'URL do YouTube inválida ou não reconhecida.' }, { status: 400 });
     }
 
-    if (videoId && videoId.includes('?')) {
-      videoId = videoId.split('?')[0];
-    }
-
-    if (!videoId || videoId.length !== 11) {
-      return NextResponse.json({ success: false, error: 'URL do YouTube inválida.' }, { status: 400 });
-    }
-
+    // Insere os dados usando o ID limpo como chave primária, tratando conflitos caso o vídeo já exista
     await sql`
       INSERT INTO videos (id, title, subtitle, description, category, subcategory, views)
       VALUES (${videoId}, ${title.trim()}, ${subtitle?.trim() || 'Traje'}, ${description?.trim() || ''}, ${category || 'trajes'}, ${subcategory || 'todos'}, 0)
       ON CONFLICT (id) DO UPDATE 
-      SET title = ${title.trim()}, subtitle = ${subtitle?.trim() || 'Traje'}, description = ${description?.trim() || ''}, category = ${category || 'trajes'}, subcategory = ${subcategory || 'todos'};
+      SET title = ${title.trim()}, 
+          subtitle = ${subtitle?.trim() || 'Traje'}, 
+          description = ${description?.trim() || ''}, 
+          category = ${category || 'trajes'}, 
+          subcategory = ${subcategory || 'todos'};
     `;
 
-    return NextResponse.json({ success: true, message: 'Vídeo salv com sucesso!' });
+    return NextResponse.json({ success: true, message: 'Vídeo salvo com sucesso!' });
   } catch (error: any) {
     console.error("Erro interno na rota POST de vídeos:", error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -89,7 +86,7 @@ export async function POST(request: Request) {
 }
 
 /**
- * MÉTODO GET: Resgata a lista ordenada de todos os vídeos para alimentar o frontend.
+ * MÉTODO GET: Resgata a lista ordenada de todos os vídeos para alimentar o seu frontend.
  */
 export async function GET() {
   try {
