@@ -6,21 +6,25 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // MUDADO DE false PARA true: Isso vai ignorar os erros e forçar o deploy
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
-  // Allow access to remote image placeholder.
+  // Permitir acesso a placeholders de imagem e miniaturas do YouTube
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'picsum.photos',
         port: '',
-        pathname: '/**', // This allows any path under the hostname
+        pathname: '/**', 
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+        port: '',
+        pathname: '/**', 
       },
     ],
   },
-  // output: 'standalone',
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
