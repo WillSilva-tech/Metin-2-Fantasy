@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Tv, Play, Check, Youtube, Sparkles, Sliders, ShieldCheck, Gamepad2, Layers, Flame,
-  ThumbsUp, Plus, X, Heart, Eye, Video, AlertCircle, Calendar, Trash2, User, Clock, Pencil
+  ThumbsUp, Plus, X, Heart, Eye, Video, AlertCircle, Calendar, Trash2, User, Clock, Pencil, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -67,6 +67,27 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newGuildName, setNewGuildName] = useState('');
   const [submitError, setSubmitError] = useState('');
+
+  // === INÍCIO LOGICA DE PAGINAÇÃO DOS HIGHLIGHTS ===
+  const [currentPage, setCurrentPage] = useState(1);
+  const videosPerPage = 6;
+  
+  // Calculate indices
+  const indexOfLastVideo = currentPage * videosPerPage;
+  const indexOfFirstVideo = indexOfLastVideo - videosPerPage;
+  const currentHighlights = playerHighlights.slice(indexOfFirstVideo, indexOfLastVideo);
+  const totalPages = Math.ceil(playerHighlights.length / videosPerPage);
+
+  // Pagination Change Handler with smooth scroll recovery
+  const paginate = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+    // Optional: Smoothly scroll slightly up so the user stays near the deck header
+    const deckAnchor = document.getElementById('community-highlights-area');
+    if (deckAnchor) {
+      deckAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+  // === FIM LOGICA DE PAGINAÇÃO DOS HIGHLIGHTS ===
 
   // Developer Mode States for configuration box restriction
   const [isDeveloper, setIsDeveloper] = useState(false);
@@ -173,7 +194,12 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
           likes: 156,
           views: 2402,
           createdAt: '06 Jun 2026'
-        }
+        },
+        // Adding mock data to test pagination visual appearance if local storage is empty
+        { id: 'hl-4', title: 'Farm Secundário na Ilha das Sombras', videoUrl: '...', youtubeId: '8YQubtW_8uA', playerName: 'ArcherMaster', guildName: 'TiroCerto', likes: 45, views: 500, createdAt: '05 Jun 2026' },
+        { id: 'hl-5', title: 'Melhorando Armadura para +9 (Sorte ou Azar?)', videoUrl: '...', youtubeId: 'xR7bshf6E5M', playerName: 'FerreiroDoido', likes: 210, views: 3200, createdAt: '04 Jun 2026' },
+        { id: 'hl-6', title: 'Domando Montaria Rara: Dragão de Gelo', videoUrl: '...', youtubeId: 'P_PSTTbyD8w', playerName: 'RiderStorm', guildName: 'Cavalaria', likes: 78, views: 900, createdAt: '03 Jun 2026' },
+        { id: 'hl-7', title: 'Top 5 Momentos Engraçados do Discord', videoUrl: '...', youtubeId: '8YQubtW_8uA', playerName: 'Jester', likes: 300, views: 4500, createdAt: '02 Jun 2026' },
       ];
       setPlayerHighlights(initial);
     }
@@ -227,6 +253,11 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
       const updated = playerHighlights.filter(hl => hl.id !== id);
       setPlayerHighlights(updated);
       localStorage.setItem('fantasy2_player_highlights', JSON.stringify(updated));
+      // Force page reset if deleting last item of a page
+      const currentItems = updated.slice((currentPage - 1) * videosPerPage, currentPage * videosPerPage);
+      if (currentItems.length === 0 && currentPage > 1) {
+         setCurrentPage(currentPage - 1);
+      }
     }
   };
 
@@ -275,6 +306,9 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
     setNewPlayerName('');
     setNewGuildName('');
     setShowSubmitForm(false);
+    
+    // Switch to first page to see the new addition
+    setCurrentPage(1);
 
     confetti({
       particleCount: 80,
@@ -1402,16 +1436,16 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
           )}
         </AnimatePresence>
 
-        {/* Community Highlights Grid */}
+        {/* Community Highlights Grid (Mapeando currentHighlights em vez de todos) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6" id="highlights-mural-deck">
-          {playerHighlights.length === 0 ? (
+          {currentHighlights.length === 0 ? (
             <div className="col-span-full py-12 text-center border border-dashed border-white/10 rounded-2xl bg-black/30">
               <Video className="w-12 h-12 text-stone-600 mx-auto mb-3 animate-bounce" />
               <p className="text-stone-400 font-serif text-sm uppercase">Nenhum destaque cadastrado</p>
               <p className="text-stone-600 text-xs mt-1">Seja o primeiro a enviar sua gameplay e apareça na muralha de honra!</p>
             </div>
           ) : (
-            playerHighlights.map((hl) => (
+            currentHighlights.map((hl) => (
               <div
                 key={hl.id}
                 onClick={() => setActiveHighlightVideo(hl)}
@@ -1492,6 +1526,43 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
             ))
           )}
         </div>
+
+        {/* CONTROLES DE PAGINAÇÃO (Novo) */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center mt-12 gap-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2.5 rounded-lg border border-white/10 bg-black/40 text-stone-400 hover:text-primary hover:border-primary/50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:border-white/10 transition-all cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: totalPages }, (_, index) => (
+                <button
+                  key={index + 1}
+                  onClick={() => paginate(index + 1)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg font-mono text-xs font-bold transition-all duration-300 cursor-pointer ${
+                    currentPage === index + 1
+                      ? 'bg-gradient-to-b from-[#FF6A00] to-red-600 text-white shadow-md border border-[#FF6A00]/50'
+                      : 'bg-[#150A04]/80 text-stone-400 border border-white/5 hover:bg-[#FF6A00]/10 hover:text-white'
+                  }`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2.5 rounded-lg border border-white/10 bg-black/40 text-stone-400 hover:text-primary hover:border-primary/50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:border-white/10 transition-all cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
       </div>
 
