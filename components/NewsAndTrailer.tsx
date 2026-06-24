@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Tv, Play, Check, Youtube, Sparkles, Sliders, ShieldCheck, Gamepad2, Layers, Flame,
   ThumbsUp, Plus, X, Heart, Eye, Video, AlertCircle, Calendar, Trash2, User, Clock, Pencil, ChevronLeft, ChevronRight
@@ -408,7 +408,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
           alert('Erro ao excluir: ' + data.error);
         }
       } catch (err: any) {
-        alert('Erro ao conectar com servidor: ' + err.message);
+        alert('Erro ao conectar com servidor. Tente novamente.');
       }
     }
   };
@@ -487,7 +487,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
         }
       }
     } catch (err: any) {
-      setPlaylistFormError('Erro ao comunicar com o servidor: ' + err.message);
+      setPlaylistFormError('Erro ao comunicar com o servidor. Tente novamente.');
     }
 
     confetti({
@@ -618,7 +618,7 @@ export default function NewsAndTrailer({ onRegisterClick, user }: NewsAndTrailer
       }
     } catch (err: any) {
       setGlobalSaveStatus('error');
-      setGlobalSaveMessage('Erro de conexão no reino: ' + err.message);
+      setGlobalSaveMessage('Erro de conexão no reino. Tente novamente.');
     }
   };
 

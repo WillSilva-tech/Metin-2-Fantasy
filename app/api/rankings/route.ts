@@ -1,50 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db/index';
-import { characters, guilds } from '@/src/db/schema';
-import { ensureSeeded } from '@/src/lib/auth-server';
-import { asc, desc } from 'drizzle-orm';
+import { classNameFromJob, kingdomFromEmpire, metin2PlayerPool } from '@/src/lib/metin2-mysql';
+import { logApiError, publicError, rateLimit } from '@/src/lib/api-security';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, 'rankings', 60, 60_000);
+  if (limited) return limited;
+
   try {
-    await ensureSeeded();
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') || 'all';
 
-    if (type === 'players') {
-      const dbPlayers = await db.select()
-        .from(characters)
-        .orderBy(asc(characters.rank))
-        .limit(20);
-      return NextResponse.json({ success: true, players: dbPlayers });
-    }
-
     if (type === 'guilds') {
-      const dbGuilds = await db.select()
-        .from(guilds)
-        .orderBy(asc(guilds.rank))
-        .limit(20);
-      return NextResponse.json({ success: true, guilds: dbGuilds });
+      const [guildRows] = await metin2PlayerPool.execute<any[]>(
+        'SELECT name, master AS leaderNick, level, ladder_point AS points FROM guild ORDER BY level DESC, ladder_point DESC LIMIT 20'
+      );
+
+      return NextResponse.json({
+        success: true,
+        guilds: guildRows.map((guild, index) => ({
+          id: index + 1,
+          rank: index + 1,
+          name: guild.name,
+          leaderNick: guild.leaderNick || 'Desconhecido',
+          level: Number(guild.level || 1),
+          kingdom: 'N/A',
+          points: Number(guild.points || 0),
+        })),
+      });
     }
 
-    // Default: Return both
-    const dbPlayers = await db.select()
-      .from(characters)
-      .orderBy(asc(characters.rank))
-      .limit(10);
+    const [playerRows] = await metin2PlayerPool.execute<any[]>(
+      `SELECT p.name AS nick, p.level, p.job, p.playtime AS playedTime, COALESCE(pi.empire, 1) AS empire
+       FROM player p
+       LEFT JOIN player_index pi ON pi.id = p.account_id
+       WHERE p.name NOT LIKE "[%]%"
+       ORDER BY p.level DESC, p.exp DESC
+       LIMIT 20`
+    );
 
-    const dbGuilds = await db.select()
-      .from(guilds)
-      .orderBy(asc(guilds.rank))
-      .limit(10);
+    const players = playerRows.map((player, index) => ({
+      id: index + 1,
+      rank: index + 1,
+      nick: player.nick,
+      level: Number(player.level || 1),
+      kingdom: kingdomFromEmpire(Number(player.empire || 1)),
+      className: classNameFromJob(Number(player.job || 0)),
+      playedTime: `${Math.floor(Number(player.playedTime || 0) / 60)}h`,
+    }));
 
-    return NextResponse.json({ 
-      success: true, 
-      players: dbPlayers,
-      guilds: dbGuilds
-    });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    if (type === 'players') {
+      return NextResponse.json({ success: true, players });
+    }
+
+    return NextResponse.json({ success: true, players, guilds: [] });
+  } catch (err) {
+    logApiError('rankings', err);
+    return publicError('Falha ao carregar o Hall da Fama.', 500);
   }
 }

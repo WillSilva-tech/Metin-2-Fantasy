@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Shield, Key, History, HelpCircle, 
   RefreshCw, CheckCircle, Crown, Gift, Sparkles, 
@@ -28,6 +28,9 @@ export default function PlayerDashboard({
   const [newPassword, setNewPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [characters, setCharacters] = useState<any[]>(Array.isArray(user?.characters) ? user.characters : []);
+  const [isLoadingCharacters, setIsLoadingCharacters] = useState(false);
+  const [characterLoadError, setCharacterLoadError] = useState<string | null>(null);
 
   // Character Desbugger State
   const [unstickingChar, setUnstickingChar] = useState<string | null>(null);
@@ -53,6 +56,66 @@ export default function PlayerDashboard({
     }
   }, [user?.login]);
 
+  useEffect(() => {
+    setCharacters(Array.isArray(user?.characters) ? user.characters : []);
+    setCharacterLoadError(null);
+
+    if (!user?.sessionToken) {
+      setCharacterLoadError('Sessao antiga detectada. Saia e entre novamente para carregar seus personagens.');
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadCharacters() {
+      setIsLoadingCharacters(true);
+      try {
+        const res = await fetch('/api/auth/characters', {
+          headers: {
+            Authorization: 'Bearer ' + user.sessionToken,
+          },
+          cache: 'no-store',
+        });
+        const data = await res.json();
+
+        if (!cancelled && !res.ok) {
+          setCharacters([]);
+          setCharacterLoadError(
+            res.status === 401
+              ? 'Sessao expirada. Saia e entre novamente para carregar seus personagens.'
+              : data.error || 'Nao foi possivel carregar seus personagens agora.'
+          );
+          return;
+        }
+
+        if (!cancelled && res.ok && data.success && Array.isArray(data.characters)) {
+          setCharacters(data.characters);
+          setCharacterLoadError(null);
+          const updatedUser = { ...user, characters: data.characters };
+          if (onUpdateUser) {
+            onUpdateUser(updatedUser);
+          }
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('fantasy2_user_session', JSON.stringify(updatedUser));
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setFeedbackMsg({ type: 'error', text: 'Nao foi possivel atualizar seus personagens agora.' });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingCharacters(false);
+        }
+      }
+    }
+
+    loadCharacters();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.login, user?.sessionToken]);
+
   const handleUpdatePassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPassword || !newPassword) {
@@ -76,18 +139,59 @@ export default function PlayerDashboard({
     setNewEmail('');
   };
 
-  const handleUnstickChar = (charName: string) => {
-    setUnstickingChar(charName);
+  const handleUnstickChar = async (char: any) => {
+    if (!user?.sessionToken) {
+      setFeedbackMsg({ type: 'error', text: 'Sessao expirada. Saia e entre novamente para desbugar personagens.' });
+      return;
+    }
+
+    setUnstickingChar(char.name);
     setIsUnsticking(true);
 
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/auth/characters/unstick', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + user.sessionToken,
+        },
+        body: JSON.stringify({ characterId: char.id }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Nao foi possivel desbugar este personagem.');
+      }
+
+      const refreshed = await fetch('/api/auth/characters', {
+        headers: {
+          Authorization: 'Bearer ' + user.sessionToken,
+        },
+        cache: 'no-store',
+      });
+      const refreshedData = await refreshed.json();
+      if (refreshed.ok && refreshedData.success && Array.isArray(refreshedData.characters)) {
+        setCharacters(refreshedData.characters);
+        const updatedUser = { ...user, characters: refreshedData.characters };
+        if (onUpdateUser) {
+          onUpdateUser(updatedUser);
+        }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('fantasy2_user_session', JSON.stringify(updatedUser));
+        }
+      }
+
       setIsUnsticking(false);
-      setFeedbackMsg({ 
-        type: 'success', 
-        text: `O personagem [${charName}] foi teletransportado com sucesso para a Praça Principal (Zona Segura) do seu Reino!` 
+      setFeedbackMsg({
+        type: 'success',
+        text: `O personagem [${char.name}] foi teletransportado com sucesso para a City 1 do seu Reino!`,
       });
       setUnstickingChar(null);
-    }, 2000);
+    } catch {
+      setIsUnsticking(false);
+      setFeedbackMsg({ type: 'error', text: 'Nao foi possivel desbugar este personagem agora.' });
+      setUnstickingChar(null);
+    }
   };
 
   const handleClaimDailyReward = () => {
@@ -154,14 +258,6 @@ export default function PlayerDashboard({
       });
     }, 1500);
   };
-
-  const fakeCharactersDefault = [
-    { name: 'Apocalypse⚔️', kingdom: 'Shinsoo', classType: 'Guerreiro', level: 95 },
-    { name: 'Arthas💀', kingdom: 'Jinno', classType: 'Shura', level: 82 },
-    { name: 'Athena🔮', kingdom: 'Chunjo', classType: 'Shaman', level: 60 }
-  ];
-
-  const characters = user?.characters || fakeCharactersDefault;
 
   const kingdomLabel = (k: string) => {
     switch (k) {
@@ -450,8 +546,21 @@ export default function PlayerDashboard({
               </span>
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {characters.map((char: any, charIdx: number) => {
+            {isLoadingCharacters ? (
+              <div className="p-6 bg-[#080402]/40 rounded-lg border border-white/5 text-center text-xs text-[#BCAD9E] font-mono">
+                Carregando personagens da conta...
+              </div>
+            ) : characterLoadError ? (
+              <div className="p-6 bg-red-950/20 rounded-lg border border-red-900/30 text-center text-xs text-red-300 font-mono">
+                {characterLoadError}
+              </div>
+            ) : characters.length === 0 ? (
+              <div className="p-6 bg-[#080402]/40 rounded-lg border border-white/5 text-center text-xs text-[#BCAD9E] font-mono">
+                Nenhum personagem encontrado nesta conta.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {characters.map((char: any, charIdx: number) => {
                 const kingdomColorClass = 
                   char.kingdom === 'Shinsoo' 
                     ? 'text-red-500' 
@@ -461,7 +570,7 @@ export default function PlayerDashboard({
 
                 return (
                   <div
-                    key={charIdx}
+                    key={char.id || charIdx}
                     className="p-4 bg-[#080402]/40 rounded-lg border border-white/5 flex items-center justify-between group hover:border-[#FF6A00]/20 transition-all duration-350"
                   >
                     <div className="flex items-center gap-3">
@@ -487,7 +596,7 @@ export default function PlayerDashboard({
                     </div>
 
                     <button
-                      onClick={() => handleUnstickChar(char.name)}
+                      onClick={() => handleUnstickChar(char)}
                       disabled={isUnsticking && unstickingChar === char.name}
                       className="px-3 py-1.5 rounded bg-amber-950/20 text-[#FFD700] border border-amber-900/30 hover:border-primary hover:text-white hover:bg-primary/10 text-xs font-serif font-black uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1 shrink-0"
                     >
@@ -502,8 +611,9 @@ export default function PlayerDashboard({
                     </button>
                   </div>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
           {/* QUICK ALERTS & UTILITY SUMMARY */}

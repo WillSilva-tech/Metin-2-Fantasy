@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, Calendar, Clock, Swords, Shield, Coins, 
   ChevronRight, X, Compass, Globe, Skull, Users, Trophy, Flame

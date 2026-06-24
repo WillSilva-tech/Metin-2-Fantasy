@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock, User, RefreshCw, Key } from 'lucide-react';
 
 interface LoginModalProps {
@@ -101,7 +101,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess, onOpenRegi
                 type="text"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
-                placeholder="Ex: Apocalypse2"
+                placeholder="Ex: akira"
                 className="w-full bg-[#080402] border border-white/10 rounded pl-9 pr-3 py-2 text-white focus:outline-none focus:border-primary/50 transition-colors"
                 id="login-username-input"
               />

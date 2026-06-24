@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { 
   Activity, Users, Swords, Cpu, Download, Coins, ShieldAlert, Award 
 } from 'lucide-react';
@@ -17,31 +17,55 @@ export default function StatsAndQuick({
   onDownloadClick, 
   onShopClick 
 }: StatsAndQuickProps) {
-  const [playersOnline, setPlayersOnline] = useState(1248);
+  const [playersOnline, setPlayersOnline] = useState(0);
+  const [serverStatus, setServerStatus] = useState<'ONLINE' | 'OFFLINE'>('ONLINE');
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
-  // Subtle dynamic fluctuation to make stats look live and real-time
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPlayersOnline(prev => {
-        const delta = Math.floor(Math.random() * 9) - 4;
-        return Math.max(1210, Math.min(1340, prev + delta));
-      });
-    }, 4000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    async function loadServerStatus() {
+      try {
+        const res = await fetch('/api/server/status', { cache: 'no-store' });
+        const data = await res.json();
+
+        if (!cancelled && res.ok && data.success) {
+          setPlayersOnline(Number(data.playersOnline || 0));
+          setServerStatus(data.status === 'online' ? 'ONLINE' : 'OFFLINE');
+        }
+      } catch {
+        if (!cancelled) {
+          setServerStatus('OFFLINE');
+          setPlayersOnline(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingStats(false);
+        }
+      }
+    }
+
+    loadServerStatus();
+    const interval = window.setInterval(loadServerStatus, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, []);
 
   const stats = [
     {
       label: 'Status do Reino',
-      value: 'ONLINE',
+      value: serverStatus,
       icon: Activity,
-      color: 'text-emerald-400',
+      color: serverStatus === 'ONLINE' ? 'text-emerald-400' : 'text-red-400',
       glow: 'shadow-emerald-500/20',
-      bgGlow: 'bg-emerald-500/10'
+      bgGlow: serverStatus === 'ONLINE' ? 'bg-emerald-500/10' : 'bg-red-500/10'
     },
     {
       label: 'Guerreiros Ativos',
-      value: playersOnline.toLocaleString('pt-BR'),
+      value: isLoadingStats ? '...' : playersOnline.toLocaleString('pt-BR'),
       icon: Users,
       color: 'text-primary',
       glow: 'shadow-primary/20',
@@ -102,17 +126,17 @@ export default function StatsAndQuick({
               <Award className="w-5 h-5 text-highlight animate-spin-slow" />
               <div className="text-left">
                 <span className="text-[10px] uppercase font-mono tracking-wider text-[#FFD700] block font-bold">
-                  Bônus Mundiais Ativos
+                  Melhor servidor PvP da atualidade
                 </span>
                 <span className="text-[11px] font-sans text-[#BCAD9E]">
-                  Aproveite taxas multiplicadas de reinos neste final de semana!
+                  Servidor 100% PvP: nao precisa upar nivel. Pacote do Sabio, skill P e level 99 direto no NPC!
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 font-sans font-bold text-xs bg-[#FF6A00]/20 text-primary border border-primary/30 py-0.5 px-2 rounded">
-              <span>EXP +300%</span>
+              <span>PvP 100%</span>
               <span className="text-white/20">•</span>
-              <span>DROP +200%</span>
+              <span>Level 99 no NPC</span>
             </div>
           </div>
         </div>

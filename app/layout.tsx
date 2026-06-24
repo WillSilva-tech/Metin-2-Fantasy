@@ -15,8 +15,12 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: 'Fantasy2 — Website Oficial MMORPG AAA Premium',
-  description: 'Explore um mundo de fantasia sombria, enfrente dragões ancestrais e conquiste os três reinos. O melhor servidor de Metin2 privado internacional.',
+  title: 'Fantasy - Website Oficial',
+  description: 'Website oficial do Fantasy.',
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, LogOut, Menu, X, Shield, LayoutDashboard, User } from 'lucide-react';
 
 interface HeaderProps {
@@ -79,7 +79,7 @@ export default function Header({ user, onLogout, onOpenLogin, onOpenRegister, on
             ))}
             {/* Direct Link to Discord Simulated */}
             <a
-              href="https://discord.com"
+              href="https://discord.gg/p9RqwmhZsp"
               target="_blank"
               rel="noopener noreferrer"
               className="font-serif text-sm uppercase tracking-wider text-[#9B90D8] hover:text-[#A79DFF] transition-all font-medium"
@@ -181,7 +181,7 @@ export default function Header({ user, onLogout, onOpenLogin, onOpenRegister, on
                 </button>
               ))}
               <a
-                href="https://discord.com"
+                href="https://discord.gg/p9RqwmhZsp"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2.5 text-[#9185EE] hover:text-white transition-colors border-b border-white/5"

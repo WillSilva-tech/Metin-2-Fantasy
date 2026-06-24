@@ -47,16 +47,39 @@ header("X-Content-Type-Options: nosniff");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: no-referrer-when-downgrade");
 
-// Database Configurations - Replace with your Hostinger or Game DB Server credentials
-define('DB_HOST', '127.0.0.1'); // Normally game server IP or 'localhost' on Hostinger
-define('DB_PORT', '3306');
-define('DB_USER', 'metin2_web');
-define('DB_PASS', 'S3cur3_Pa$$w0rd_H3r3'); // Protect this string!
-define('DB_ACCOUNT', 'account');
-define('DB_PLAYER', 'player');
+// Optional local config for Hostinger panels without environment variable support.
+// This file is ignored by Git and must never be uploaded to a public repository.
+$localConfigPath = __DIR__ . '/config.local.php';
+if (file_exists($localConfigPath)) {
+    require_once $localConfigPath;
+}
 
-// Security Key for extra local cookies encryption / hash salts
-define('SECURITY_SALT', 'F4nt4sy2_SuP3r_S3cr3t_S4lt_Ch4ng3_Th1s_In_Pr0duct10n!');
+function requiredEnv($key) {
+    if (defined($key)) {
+        return constant($key);
+    }
+
+    $value = getenv($key);
+    if ($value === false || trim($value) === '') {
+        error_log("[M2_SECURITY_CONFIG_ERR] Missing required environment variable: " . $key);
+        die("<div style='background:#150a04;color:#ff6a00;font-family:sans-serif;padding:20px;border:1px solid #c92a00;border-radius:6px;max-width:500px;margin:100px auto;text-align:center;'>
+                <h3 style='margin-top:0;text-shadow:0 0 10px rgba(255,106,0,0.5)'>Configuração Pendente</h3>
+                <p style='color:#ccc;font-size:14px;line-height:1.6;'>O ambiente do servidor ainda não foi configurado com segurança. Contate a administração.</p>
+             </div>");
+    }
+    return $value;
+}
+
+// Database Configurations - keep credentials in Hostinger/server environment variables.
+define('DB_HOST', requiredEnv('M2_DB_HOST'));
+define('DB_PORT', getenv('M2_DB_PORT') ?: '3306');
+define('DB_USER', requiredEnv('M2_DB_USER'));
+define('DB_PASS', requiredEnv('M2_DB_PASS'));
+define('DB_ACCOUNT', getenv('M2_DB_ACCOUNT') ?: 'account');
+define('DB_PLAYER', getenv('M2_DB_PLAYER') ?: 'player');
+
+// Security Key for local cookies/hash salts. Must be unique in production.
+define('SECURITY_SALT', requiredEnv('M2_SECURITY_SALT'));
 
 /**
  * PDO Singleton Connection Helper for Metin2 Databases

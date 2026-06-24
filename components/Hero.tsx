@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { Flame, Swords, UserPlus } from 'lucide-react';
 
 interface HeroProps {
@@ -139,7 +139,7 @@ export default function Hero({ onRegisterClick, onDownloadClick }: HeroProps) {
       <div className="relative z-20 max-w-4xl px-4 text-center mt-12">
         {/* Fantasy Logo Title Badge */}
         <motion.div 
-          initial={{ opacity: 0, y: -20 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1 }}
           className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs uppercase tracking-widest font-mono select-none"
@@ -150,7 +150,7 @@ export default function Hero({ onRegisterClick, onDownloadClick }: HeroProps) {
 
         {/* Epic Fantasy2 Logo Branding Headliner */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
+          initial={false}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.2 }}
           className="mb-4 flex justify-center"
@@ -165,7 +165,7 @@ export default function Hero({ onRegisterClick, onDownloadClick }: HeroProps) {
 
         {/* Subtitle */}
         <motion.p 
-          initial={{ opacity: 0, y: 15 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.8 }}
           className="max-w-xl mx-auto mt-6 text-[#E5D5C5] text-sm sm:text-base leading-relaxed tracking-wide drop-shadow-md"
@@ -175,7 +175,7 @@ export default function Hero({ onRegisterClick, onDownloadClick }: HeroProps) {
 
         {/* CTA Actions */}
         <motion.div 
-          initial={{ opacity: 0, y: 25 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 1 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10"

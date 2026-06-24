@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Eye, Gamepad2, Heart, Award, Sparkles, BookOpen } from 'lucide-react';
 import { GAME_CLASSES, GameClass } from '@/lib/game-data';
 

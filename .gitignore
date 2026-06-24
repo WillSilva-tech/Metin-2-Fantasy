@@ -5,3 +5,7 @@ coverage/
 *.log
 .env*
 !.env.example
+env
+hostinger-php/config.local.php
+src/db/fallback_db.json
+tsconfig.tsbuildinfo

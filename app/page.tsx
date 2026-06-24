@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Flame, Swords, Shield, Coins, AlertTriangle, Key, 
   RefreshCw, Terminal, CheckCircle2, Ticket 
@@ -28,12 +28,6 @@ export default function Home() {
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   // Voucher / Coupon system
-  const [vouchersList, setVouchersList] = useState<Record<string, number>>({
-    'FANTASYNEW': 5000,
-    'MAGMABOSS': 15000,
-    'SORTE50': 50000,
-    'GMGIFT': 100000
-  });
   const [voucherInput, setVoucherInput] = useState('');
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [voucherSuccess, setVoucherSuccess] = useState<string | null>(null);
@@ -111,7 +105,7 @@ export default function Home() {
   };
 
   // Redeem code logical checks
-  const handleRedeemVoucher = (e: React.FormEvent) => {
+  const handleRedeemVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     setVoucherError(null);
     setVoucherSuccess(null);
@@ -127,13 +121,29 @@ export default function Home() {
       return;
     }
 
-    if (code in vouchersList) {
-      const prize = vouchersList[code];
-      
-      // Update balance
-      handleUpdateCash(prize);
+    try {
+      const res = await fetch('/api/coupons/redeem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (user.sessionToken || ''),
+        },
+        body: JSON.stringify({ code }),
+      });
 
-      // Add to transaction record
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setVoucherError(data.error || 'Codigo de cupom invalido ou ja utilizado.');
+        return;
+      }
+
+      const prize = Number(data.addedCash || 0);
+      const nextUser = { ...user, cashBalance: Number(data.newCashBalance || user.cashBalance || 0) };
+      setUser(nextUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fantasy2_user_session', JSON.stringify(nextUser));
+      }
+
       handleRecordTransaction({
         date: new Date().toISOString().substring(0, 10),
         method: 'CUPOM / PROMO',
@@ -142,44 +152,15 @@ export default function Home() {
         status: 'Pago'
       });
 
-      setVoucherSuccess(`Cupom [${code}] ativado! Creditamos +${formatCash(prize)} CASH na sua conta.`);
+      setVoucherSuccess(data.message || `Cupom [${code}] ativado! Creditamos +${formatCash(prize)} CASH na sua conta.`);
       setVoucherInput('');
-
-      // Delete so it cannot be abused/re-entered
-      const updatedVouchers = { ...vouchersList };
-      delete updatedVouchers[code];
-      setVouchersList(updatedVouchers);
-
-      // Create Stripe simulated event log via API route injection
-      fetch('/api/payment/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `evt_voucher_${Math.floor(Math.random() * 1000000)}`,
-          type: 'payment_intent.succeeded',
-          data: {
-            object: {
-              id: `voucher_${code}`,
-              amount: 0,
-              metadata: {
-                accountLogin: user.login,
-                cashAmount: prize,
-                paymentMethod: 'VOUCHER'
-              }
-            }
-          }
-        })
-      });
-    } else {
-      setVoucherError('Código de cupom inválido ou já utilizado.');
+    } catch {
+      setVoucherError('Erro de conexao com o servidor. Tente novamente.');
     }
   };
 
   const handleAddVoucherFromConsole = (code: string, amount: number) => {
-    setVouchersList((prev) => ({
-      ...prev,
-      [code]: amount
-    }));
+    console.warn('Cupons sao validados pelo servidor.', code, amount);
   };
 
   const handleAddNewsFromConsole = (title: string, category: 'update' | 'event' | 'maintenance', excerpt: string) => {
@@ -391,9 +372,7 @@ export default function Home() {
           <span>•</span>
           <span>STRIPE VERIFIED</span>
           <span>•</span>
-          <span className="text-stone-700">
-            CORE ENGINE PORT: 3000
-          </span>
+          <span className="text-stone-700">STATUS SEGURO</span>
         </div>
       </footer>
 

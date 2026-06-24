@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserPlus, FileText, Mail, Lock, ShieldAlert, CheckCircle, RefreshCw } from 'lucide-react';
 
 interface RegisterModalProps {
@@ -71,33 +71,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess, onOp
         setErrorMsg(data.error || 'Falha de registro. Verifique os dados fornecidos.');
       }
     } catch (err) {
-      // Offline fallback simulations
-      if (password !== confirmPassword) {
-        setErrorMsg('As senhas não coincidem.');
-        setIsSubmitting(false);
-        return;
-      }
-      setSuccessMsg('Sua conta foi criada com sucesso. Verifique seu e-mail para ativação.');
-      setTimeout(() => {
-        onRegisterSuccess({
-          login,
-          name,
-          email,
-          cashBalance: 0,
-          characters: [
-            { name: `${login}WAR`, kingdom: 'Shinsoo', classType: 'guerreiro', level: 1 },
-            { name: `${login}NIN`, kingdom: 'Jinno', classType: 'ninja', level: 1 }
-          ]
-        });
-        onClose();
-        setLogin('');
-        setName('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        setCharDeleteCode('');
-        setSuccessMsg(null);
-      }, 3500);
+      setErrorMsg('Erro de conexao com o servidor. Tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

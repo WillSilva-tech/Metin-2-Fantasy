@@ -113,12 +113,6 @@ class SecurityAuditEngine:
         try:
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                 for line_idx, line in enumerate(f, 1):
-                    # Skip common comment declarations or config.php template files
-                    if 'DB_PASS' in line and 'S3cur3_Pa$$w0rd_H3r3' in line:
-                        continue
-                    if 'SECURITY_SALT' in line and 'F4nt4sy2_SuP3r_S3cr3t_S4lt_Ch4ng3_Th1s_In_Pr0duct10n!' in line:
-                        continue
-
                     for pattern, message in secrets_regex:
                         if re.search(pattern, line, re.IGNORECASE):
                             # Ensure we don't alert double quotes on placeholder tags

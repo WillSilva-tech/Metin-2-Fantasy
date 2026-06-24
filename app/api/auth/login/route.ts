@@ -1,91 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db/index';
-import { users, characters } from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
-import { ensureSeeded } from '@/src/lib/auth-server';
+import {
+  assertValidLogin,
+  assertValidPassword,
+  normalizeLogin,
+  signAccountSession,
+  getAccountCharacters,
+  verifyAccountPassword,
+} from '@/src/lib/metin2-mysql';
+import { logApiError, publicError, rateLimit } from '@/src/lib/api-security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, 'auth.login', 8, 60_000);
+  if (limited) return limited;
+
   try {
-    await ensureSeeded();
     const { login, password } = await req.json();
 
-    if (!login || !login.trim()) {
-      return NextResponse.json({ success: false, error: 'Digite seu nome de usuário (login).' }, { status: 400 });
+    if (!login || !password) {
+      return NextResponse.json({ success: false, error: 'Login e senha sao obrigatorios.' }, { status: 400 });
     }
 
-    const normalizedLogin = login.trim().toLowerCase();
+    const normalizedLogin = normalizeLogin(login);
+    assertValidLogin(normalizedLogin);
+    assertValidPassword(password);
 
-    // 1. Check if user already exists in PostgreSQL
-    let matchedUser = await db.select().from(users).where(eq(users.login, normalizedLogin)).limit(1);
-    let userObj;
-
-    if (matchedUser.length > 0) {
-      userObj = matchedUser[0];
-    } else {
-      // 2. Auto-provision new user on first sign-in
-      const isGM = false;
-      const role = 'PLAYER';
-      const initialCash = 5000;
-
-      const [newUser] = await db.insert(users).values({
-        uid: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        email: `${normalizedLogin}@fantasy2.com.br`,
-        login: normalizedLogin,
-        role: role,
-        cashBalance: initialCash
-      }).returning();
-
-      userObj = newUser;
-
-      // Create default characters in database for them
-      if (isGM) {
-        await db.insert(characters).values([
-          { userId: newUser.id, nick: `★GM_${login}☠`, kingdom: 'Jinno', className: 'Shura', level: 120, rank: 1 },
-          { userId: newUser.id, nick: `★GM_${login}🔮`, kingdom: 'Chunjo', className: 'Shaman', level: 120, rank: 2 },
-          { userId: newUser.id, nick: `★GM_${login}⚡`, kingdom: 'Shinsoo', className: 'Guerreiro', level: 120, rank: 3 }
-        ]);
-      } else {
-        await db.insert(characters).values([
-          { userId: newUser.id, nick: `${login}⚔️`, kingdom: 'Shinsoo', className: 'Guerreiro', level: 95, rank: 11 },
-          { userId: newUser.id, nick: `${login}💀`, kingdom: 'Jinno', className: 'Shura', level: 82, rank: 12 }
-        ]);
-      }
+    const account = await verifyAccountPassword(normalizedLogin, password);
+    if (!account) {
+      return NextResponse.json({ success: false, error: 'Login ou senha incorretos.' }, { status: 401 });
     }
 
-    // 3. Query their real characters from PostgreSQL table
-    const dbChars = await db.select().from(characters).where(eq(characters.userId, userObj.id));
+    if (account.status && account.status !== 'OK') {
+      return NextResponse.json({ success: false, error: 'Esta conta esta bloqueada ou suspensa.' }, { status: 403 });
+    }
 
-    // Map DB characters to correct front-end properties
-    const mappedChars = dbChars.map(c => ({
-      name: c.nick,
-      kingdom: c.kingdom,
-      classType: c.className,
-      level: c.level
-    }));
+    const characters = await getAccountCharacters(account.id);
 
     return NextResponse.json({
       success: true,
-      message: 'Acesso autenticado no emulador via banco de dados!',
+      message: 'Login autenticado com sucesso.',
       user: {
-        id: userObj.id,
-        uid: userObj.uid,
-        login: userObj.login,
-        name: userObj.role === 'ADMIN' ? 'Imperador do Reino (GM/Dev)' : `${login} da Forja`,
-        email: userObj.email,
-        cashBalance: userObj.cashBalance,
-        isVip: userObj.role === 'ADMIN' || userObj.cashBalance > 100000,
-        isGM: userObj.role === 'ADMIN',
-        role: userObj.role,
-        characters: mappedChars.length > 0 ? mappedChars : [
-          { name: `${login}⚔️`, kingdom: 'Shinsoo', classType: 'Guerreiro', level: 95 }
-        ]
+        login: account.login,
+        email: account.email,
+        cashBalance: account.coins,
+        role: 'PLAYER',
+        isVip: account.coins > 100000,
+        isGM: false,
+        sessionToken: signAccountSession(account.login),
+        characters,
       },
-      isAdmin: userObj.role === 'ADMIN'
+      isAdmin: false,
     });
-
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+  } catch (err) {
+    logApiError('auth.login', err);
+    return publicError('Nao foi possivel autenticar agora. Tente novamente em instantes.', 400);
   }
 }

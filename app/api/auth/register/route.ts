@@ -1,73 +1,79 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db/index';
-import { users, characters } from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
-import { ensureSeeded } from '@/src/lib/auth-server';
+import {
+  assertValidLogin,
+  assertValidPassword,
+  createAccount,
+  findAccountByLogin,
+  getAccountCharacters,
+  normalizeLogin,
+  signAccountSession,
+} from '@/src/lib/metin2-mysql';
+import { logApiError, publicError, rateLimit } from '@/src/lib/api-security';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, 'auth.register', 5, 60_000);
+  if (limited) return limited;
+
   try {
-    await ensureSeeded();
     const { login, name, email, password, confirmPassword, charDeleteCode } = await req.json();
 
-    if (!login || !login.trim()) {
-      return NextResponse.json({ success: false, error: 'O login do usuário é obrigatório.' }, { status: 400 });
+    if (!login || !email || !password || !confirmPassword || !charDeleteCode) {
+      return NextResponse.json({ success: false, error: 'Todos os campos obrigatorios devem ser preenchidos.' }, { status: 400 });
     }
+
+    const normalizedLogin = normalizeLogin(login);
+    assertValidLogin(normalizedLogin);
+    assertValidPassword(password);
 
     if (password !== confirmPassword) {
-      return NextResponse.json({ success: false, error: 'As senhas não coincidem.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'As senhas nao coincidem.' }, { status: 400 });
     }
 
-    if (!charDeleteCode || charDeleteCode.length !== 7) {
-      return NextResponse.json({ success: false, error: 'O Código de Exclusão de Personagem deve conter exatamente 7 números.' }, { status: 400 });
+    if (!/^[0-9]{7}$/.test(charDeleteCode)) {
+      return NextResponse.json({ success: false, error: 'O Codigo de Exclusao de Personagem deve conter exatamente 7 numeros.' }, { status: 400 });
     }
 
-    const normalizedLogin = login.trim().toLowerCase();
-
-    // Check pre-existing
-    const matched = await db.select().from(users).where(eq(users.login, normalizedLogin)).limit(1);
-    if (matched.length > 0) {
-      return NextResponse.json({ success: false, error: 'Este nome de usuário já está sendo utilizado por outro herói.' }, { status: 400 });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 64) {
+      return NextResponse.json({ success: false, error: 'E-mail invalido.' }, { status: 400 });
     }
 
-    // Insert user
-    const [newUser] = await db.insert(users).values({
-      uid: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      email: email?.trim() || `${normalizedLogin}@fantasy2.com.br`,
+    const existing = await findAccountByLogin(normalizedLogin);
+    if (existing) {
+      return NextResponse.json({ success: false, error: 'Este login ja esta cadastrado.' }, { status: 409 });
+    }
+
+    const account = await createAccount({
       login: normalizedLogin,
-      role: 'PLAYER',
-      cashBalance: 0
-    }).returning();
+      password,
+      email: email.trim(),
+      socialId: charDeleteCode,
+    });
 
-    // Insert starting characters for new user in DB
-    await db.insert(characters).values([
-      { userId: newUser.id, nick: `${login}⚔️`, kingdom: 'Shinsoo', className: 'Guerreiro', level: 1, rank: 11 },
-      { userId: newUser.id, nick: `${login}🔮`, kingdom: 'Chunjo', className: 'Shaman', level: 1, rank: 12 }
-    ]);
+    if (!account) {
+      throw new Error('Conta criada, mas nao foi possivel recarregar o perfil.');
+    }
 
-    const mappedChars = [
-      { name: `${login}⚔️`, kingdom: 'Shinsoo', classType: 'Guerreiro', level: 1 },
-      { name: `${login}🔮`, kingdom: 'Chunjo', classType: 'Shaman', level: 1 }
-    ];
+    const characters = await getAccountCharacters(account.id);
 
     return NextResponse.json({
       success: true,
-      message: 'Sua conta foi provisionada e autenticada com sucesso no PostgreSQL!',
+      message: 'Conta criada com sucesso.',
       user: {
-        id: newUser.id,
-        uid: newUser.uid,
-        login: newUser.login,
-        name: name || `${login} Imperial`,
-        email: newUser.email,
-        cashBalance: 0,
+        login: account.login,
+        name: name || account.login,
+        email: account.email,
+        cashBalance: account.coins,
+        role: 'PLAYER',
         isVip: false,
         isGM: false,
-        characters: mappedChars
-      }
+        sessionToken: signAccountSession(account.login),
+        characters,
+      },
     });
-
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err) {
+    logApiError('auth.register', err);
+    return publicError('Nao foi possivel concluir o cadastro agora. Tente novamente em instantes.', 400);
   }
 }

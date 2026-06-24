@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/src/db/index';
-import { users, cashTransactions } from '@/src/db/schema';
-import { eq } from 'drizzle-orm';
-import { ensureSeeded } from '@/src/lib/auth-server';
+import Stripe from 'stripe';
+import { metin2Pool, normalizeLogin } from '@/src/lib/metin2-mysql';
+import { logApiError, publicError } from '@/src/lib/api-security';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,21 +12,31 @@ interface WebhookLog {
   event: string;
 }
 
-// In-memory array for recent simulated webhook logs that persist during runtime
 let tempWebhookLogs: WebhookLog[] = [
   {
     timestamp: new Date(Date.now() - 30000).toISOString(),
     level: 'info',
-    message: 'Stripe webhook listener initialized. Ready to receive event notifications.',
-    event: 'system.ready'
+    message: 'Webhook de pagamentos inicializado.',
+    event: 'system.ready',
   },
-  {
-    timestamp: new Date(Date.now() - 15000).toISOString(),
-    level: 'success',
-    message: 'Simulated Stripe service connection established securely with TLS 1.3.',
-    event: 'system.network'
-  }
 ];
+
+function addLog(level: WebhookLog['level'], message: string, event: string) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    event,
+  };
+  tempWebhookLogs = [entry, ...tempWebhookLogs].slice(0, 15);
+  return entry;
+}
+
+function getStripe() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) return null;
+  return new Stripe(secretKey);
+}
 
 export async function GET() {
   return NextResponse.json({ logs: tempWebhookLogs });
@@ -35,67 +44,77 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    await ensureSeeded();
-    const body = await req.json();
-    const eventType = body.type || 'payment_intent.created';
-    const amount = body.data?.object?.amount ? body.data.object.amount / 100 : 0;
-    const metadata = body.data?.object?.metadata || {};
-    
-    let message = `Evento recebido: ${eventType}`;
-    let level: 'info' | 'warn' | 'success' = 'info';
-    
-    if (eventType === 'payment_intent.created') {
-      message = `Intenção de pagamento criada para ${metadata.accountLogin || 'usuário'}. Total: R$ ${amount.toFixed(2)} via ${metadata.paymentMethod || 'PIX'}.`;
-      level = 'info';
-    } else if (eventType === 'payment_intent.succeeded') {
-      level = 'success';
-      const login = metadata.accountLogin;
-      const cashAmount = parseInt(metadata.cashAmount) || 0;
-      
-      if (login) {
-        // Look up the active user by login
-        const matched = await db.select().from(users).where(eq(users.login, login)).limit(1);
-        if (matched.length > 0) {
-          const matchedUser = matched[0];
-          
-          // Atomically update user balance and record transaction history in PostgreSQL
-          await db.transaction(async (tx) => {
-            await tx.update(users)
-              .set({ cashBalance: matchedUser.cashBalance + cashAmount })
-              .where(eq(users.id, matchedUser.id));
+    const stripe = getStripe();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const signature = req.headers.get('stripe-signature');
 
-            await tx.insert(cashTransactions).values({
-              userId: matchedUser.id,
-              amount: Math.round(amount),
-              status: 'Pago',
-              provider: 'Stripe',
-              externalId: body.data?.object?.id || `str_${Date.now()}`
-            });
-          });
-          
-          message = `Sucesso! Pagamento de R$ ${amount.toFixed(2)} confirmado para [${login}]. Creditado +${cashAmount.toLocaleString('pt-BR')} CASH via ${metadata.paymentMethod || 'PIX'} com persistência PostgreSQL!`;
-        } else {
-          message = `Erro: Usuário do login [${login}] informado pelo webhook não foi localizado no emulador.`;
-          level = 'warn';
-        }
-      } else {
-        message = `Aviso: Recebido evento bem-sucedido mas sem 'accountLogin' associado nos metadados.`;
-        level = 'warn';
-      }
+    if (!stripe || !webhookSecret || !signature) {
+      addLog('warn', 'Webhook recusado por configuracao incompleta.', 'system.config');
+      return publicError('Webhook recusado.', 400);
     }
 
-    const newLog: WebhookLog = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      event: eventType
-    };
+    const rawBody = await req.text();
+    const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
 
-    // Add to logs trace
-    tempWebhookLogs = [newLog, ...tempWebhookLogs].slice(0, 15);
+    if (event.type !== 'checkout.session.completed') {
+      addLog('info', `Evento ignorado: ${event.type}.`, event.type);
+      return NextResponse.json({ received: true });
+    }
 
-    return NextResponse.json({ success: true, added: newLog });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (session.payment_status !== 'paid') {
+      addLog('warn', 'Checkout recebido sem pagamento confirmado.', event.type);
+      return NextResponse.json({ received: true });
+    }
+
+    const metadata = session.metadata || {};
+    const login = metadata.accountLogin ? normalizeLogin(String(metadata.accountLogin)) : '';
+    const packageId = String(metadata.packageId || '');
+    const cashAmount = Number.parseInt(String(metadata.cashAmount || ''), 10);
+    const amountBRL = Number(session.amount_total || 0) / 100;
+    const sessionId = String(session.id || '');
+
+    if (!login || !packageId || !sessionId || !Number.isInteger(cashAmount) || cashAmount <= 0) {
+      addLog('warn', 'Checkout confirmado com metadados invalidos.', event.type);
+      return NextResponse.json({ received: true });
+    }
+
+    const connection = await metin2Pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await connection.execute(
+        `INSERT INTO web_payment_logs
+          (event_id, session_id, login, package_id, amount_brl, cash_amount, date_paid)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+        [event.id, sessionId, login, packageId, amountBRL, cashAmount]
+      );
+
+      const [result]: any = await connection.execute(
+        'UPDATE account SET coins = coins + ? WHERE login = ?',
+        [cashAmount, login]
+      );
+
+      if (result.affectedRows !== 1) {
+        throw new Error('Conta nao localizada para credito de pagamento.');
+      }
+
+      await connection.commit();
+      addLog('success', `Pagamento confirmado para [${login}]. Creditado +${cashAmount.toLocaleString('pt-BR')} CASH.`, event.type);
+    } catch (err: any) {
+      await connection.rollback();
+      if (err?.code === 'ER_DUP_ENTRY') {
+        addLog('info', `Webhook duplicado ignorado: ${sessionId}.`, event.type);
+        return NextResponse.json({ received: true, duplicate: true });
+      }
+      throw err;
+    } finally {
+      connection.release();
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (err) {
+    logApiError('payment.webhook', err);
+    return publicError('Webhook recusado.', 400);
   }
 }

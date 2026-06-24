@@ -418,6 +418,9 @@ function createResilientClient(realClient: any, virtualClient: any, poolRef: any
               errMsg.includes('connection') ||
               errMsg.includes('econnrefused')
             ) {
+              if (!poolRef.canFallback) {
+                throw err;
+              }
               console.log('[RESILIENT_CLIENT] Live query failed (inactive/timeout), activating virtual DB fallback.');
               poolRef.isFallbackActive = true;
               return virtualClient.query(config, valuesInput);
@@ -457,11 +460,13 @@ class ResilientPool {
   private realPool: any;
   private virtualPool: any;
   private isFallbackActiveOriginal: boolean = false;
+  private allowFallback: boolean;
 
-  constructor(realPool: any, virtualPool: any, startWithFallback: boolean) {
+  constructor(realPool: any, virtualPool: any, startWithFallback: boolean, allowFallback: boolean) {
     this.realPool = realPool;
     this.virtualPool = virtualPool;
     this.isFallbackActiveOriginal = startWithFallback;
+    this.allowFallback = allowFallback;
   }
 
   get isFallbackActive(): boolean {
@@ -470,6 +475,10 @@ class ResilientPool {
 
   set isFallbackActive(val: boolean) {
     this.isFallbackActiveOriginal = val;
+  }
+
+  get canFallback(): boolean {
+    return this.allowFallback;
   }
 
   on(event: string, callback: Function) {
@@ -491,6 +500,9 @@ class ResilientPool {
       const virtualClient = await this.virtualPool.connect();
       return createResilientClient(realClient, virtualClient, this);
     } catch (err) {
+      if (!this.allowFallback) {
+        throw err;
+      }
       console.log('[RESILIENT_POOL] Primary cluster link non-responsive, transitioning seamlessly to fallback dataset.');
       this.isFallbackActive = true;
       return this.virtualPool.connect();
@@ -511,6 +523,9 @@ class ResilientPool {
         errMsg.includes('connection') ||
         errMsg.includes('econnrefused')
       ) {
+        if (!this.allowFallback) {
+          throw err;
+        }
         console.log('[RESILIENT_POOL] Primary query deferred to high-performance local fallback store.');
         this.isFallbackActive = true;
         return this.virtualPool.query(config, valuesInput);
@@ -535,13 +550,22 @@ loadDatabaseState();
 export const createPool = () => {
   const connectionString = process.env.DATABASE_URL;
   const sqlHost = process.env.SQL_HOST;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowLocalFallback = process.env.ALLOW_LOCAL_DB_FALLBACK === 'true' || !isProduction;
 
   const inMemoryFallbackPool = new VirtualPool();
 
+  if (connectionString && /^mysql:\/\//i.test(connectionString)) {
+    throw new Error('[DATABASE] DATABASE_URL uses MySQL, but the Next.js Drizzle layer is configured for PostgreSQL. Use a postgres:// URL for Next.js or the Hostinger PHP layer for Metin2 MySQL.');
+  }
+
   // If there's no DATABASE_URL, and SQL_HOST is not configured or is the default, skip PG connection attempts to prevent timeout delays
   if (!connectionString && (!sqlHost || sqlHost === '127.0.0.1')) {
+    if (!allowLocalFallback) {
+      throw new Error('[DATABASE] Production requires DATABASE_URL or SQL_HOST for PostgreSQL. Local fallback is disabled in production.');
+    }
     console.log('[DATABASE] DATABASE_URL is not set and SQL_HOST is empty or 127.0.0.1. Activating local-first High Performance Virtual DB fallback.');
-    return new ResilientPool(null, inMemoryFallbackPool, true);
+    return new ResilientPool(null, inMemoryFallbackPool, true, allowLocalFallback);
   }
 
   try {
@@ -568,10 +592,13 @@ export const createPool = () => {
       console.log('[DATABASE] Primary pool idle error event. Active fallback enabled.');
     });
 
-    return new ResilientPool(realPool, inMemoryFallbackPool, false);
+    return new ResilientPool(realPool, inMemoryFallbackPool, false, allowLocalFallback);
   } catch (err) {
     console.log('[DATABASE] Failed to instantiate pool. Active failover triggered.');
-    return new ResilientPool(null, inMemoryFallbackPool, true);
+    if (!allowLocalFallback) {
+      throw err;
+    }
+    return new ResilientPool(null, inMemoryFallbackPool, true, true);
   }
 };
 
@@ -585,4 +612,3 @@ pool.on('error', (err: any) => {
 
 // Initialize Drizzle with our resilient pool interface.
 export const db = drizzle(pool as any, { schema });
-

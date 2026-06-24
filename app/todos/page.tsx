@@ -34,7 +34,7 @@ export default async function Page() {
 
         {error ? (
           <div className="p-3 bg-red-950/40 border border-red-500/20 text-red-400 text-xs rounded text-center">
-            Erro ao conectar com o Supabase: {error.message}
+            Nao foi possivel carregar os dados agora.
           </div>
         ) : !todos || todos.length === 0 ? (
           <div className="text-center py-8">
